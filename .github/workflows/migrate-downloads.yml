@@ -1,0 +1,58 @@
+name: Migrate Windows demos
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: [.github/workflows/migrate-downloads.yml]
+
+permissions:
+  contents: write
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - tag: 'futing-gutan-demo-v1'
+            file: 'FutingGutan_Win64.zip'
+            title: '伏霆古坛 · Windows 试玩版'
+            sha: 'ccb42ac2bc708940a6da6eb60708494a5abd77bc6afd7013598d72f620d0e9aa'
+          - tag: 'after9-demo-v1'
+            file: 'AFTER_THE_9_main_991a544_Windows_x64.zip'
+            title: 'AFTER THE 9（Windows）'
+            sha: '3d57fbee6aded46dbbb4c9b52b4f5bdba80a9d64ac6294b8099c37a965acbfd0'
+          - tag: 'zhenshui-demo-v1'
+            file: 'Zhenshui_Greybox_Demo_Win64.zip'
+            title: '镇水 · 灰盒可玩 Demo（Windows）'
+            sha: '94a82fa4469f5c5dc0097119f2aaa72a0107d6f4a91548c9c1e9ec2763c290db'
+          - tag: 'thiis-demo-v1'
+            file: 'THIIS_STORE_IS_CLOSED_Win64.zip'
+            title: 'THIIS STORE IS CLOSED（Windows）'
+            sha: '34ff18dec414e1de2cc47b2b1d24699470250e46d9bf9469009d8ae4f5e76c0e'
+          - tag: 'reload-demo-v1'
+            file: 'reload_Demo2_Win64.zip'
+            title: 'reload?!（Windows）'
+            sha: 'a6b0100fb239fa0d0d50528c43c02c7d187cf7087a4a3c06c827b2c160c86f85'
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TAG: ${{ matrix.tag }}
+      FILE: ${{ matrix.file }}
+      TITLE: ${{ matrix.title }}
+      SHA: ${{ matrix.sha }}
+    steps:
+      - name: Copy and verify the published ZIP
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh api "repos/$GITHUB_REPOSITORY/releases/tags/$TAG" | jq -e --arg name "$FILE" --arg digest "sha256:$SHA" '(.draft | not) and any(.assets[]; .name == $name and .digest == $digest)'
+            exit
+          fi
+          file="$RUNNER_TEMP/$FILE"
+          curl --fail --location --retry 5 --output "$file" "https://github.com/m2kli/portfolio/releases/download/$TAG/$FILE"
+          printf '%s  %s\n' "$SHA" "$file" | sha256sum --check
+          printf 'Windows x64。请完整解压后运行。\n\n作品集：https://m2kli.github.io/portfolio/\n\nSHA-256: `%s`\n' "$SHA" > "$RUNNER_TEMP/notes.md"
+          gh release create "$TAG" "$file" --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --title "$TITLE" --notes-file "$RUNNER_TEMP/notes.md" --latest=false
